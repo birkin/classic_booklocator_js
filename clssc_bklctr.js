@@ -41,53 +41,24 @@ var clssc_bklctr_handler = new function() {
     /* Calls bibfinder class to try to get bib, then continues processing.
      * Called by $(document).ready()
      */
-    bibnum = "foo";
     bibnum = clssc_bklctr_bibfinder.grab_bib();  // tries getting the bibnum up to 3 ways
     console.log( "- lctr; bibnum, " + bibnum );
+    process_item_table();
+    console.log( "- lctr; ending initial function: find_bib()" );
   }
 
-  // var grab_bib = function() {
-  //   /* Grabs bib via #recordnum; populates sms_url; continues processing.
-  //    * Called by find_sms_image()
-  //    */
-  //   var elmnt = document.querySelector( "#recordnum" );
-  //   if ( elmnt != null ) {
-  //       var url_string = elmnt.href;
-  //       var segments = url_string.split( "=" )[1];
-  //       bibnum = segments.slice( 0,8 );
-  //       console.log( "- bibnum, " + bibnum );
-  //       sms_url_full = sms_url_root + bibnum;
-  //       update_html();
-  //   } else {
-  //       console.log( "- no recordnum id, so no bib; exiting sms js" );
-  //   }
-  // }
-
-  // var update_html = function() {
-  //   /* Builds and displays link html.
-  //    * Called by grab_bib()
-  //    */
-  //   console.log( "- starting sms build_html()" );
-  //   var div = document.getElementById( "smsfeatures"  );
-  //   div.style.visibility="hidden";
-  //   var a = document.createElement( "a" );
-  //   var img = document.createElement( "img" );
-  //   a.appendChild( img );
-  //   div.appendChild( a );
-  //   update_attributes( a, img, div );
-  //   div.style.visibility="visible";
-  //   console.log( "- sms link added" );
-  // }
-
-  // var update_attributes = function(a, img, div) {
-  //    Fleshes out elements (must happen after appendChild() calls).
-  //    * Called by update_html()
-
-  //   a.href = sms_url_full;
-  //   a.setAttribute( "id", "sms_link" );
-  //   img.setAttribute( "src", image_path );
-  //   img.setAttribute( "border", "0" );
-  // }
+  var process_item_table = function() {
+    /* Updates items to show callnumber link if appropriate.
+     * Called by find_bib()
+     */
+    console.log( "- lctr; in process_item_table(); bibnum is, " + bibnum );
+    var rows = $( ".bibItemsEntry" );
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      bklctr_row_processor.process_item( row, bibnum );
+    }
+    console.log( "- lctr; ending process_item_table()" );
+  }
 
 };  // end namespace clssc_bklctr_handler, ```var clssc_bklctr_handler = new function() {```
 
@@ -177,6 +148,185 @@ var clssc_bklctr_bibfinder = new function() {
   }
 
 };  // end namespace clssc_bklctr_bibfinder, ```var clssc_bklctr_bibfinder = new function() {```
+
+
+/*****************/
+/* ROW-PROCESSOR */
+/*****************/
+
+var bklctr_row_processor = new function() {
+  /*
+   * Class flow description:
+   *   - Determines whether to show booklocator info
+   *   - If so, and if bib still blank, grabs bib from where it would be on a multiple-results page
+   *   - Grabs barcode
+   *   - Makes call to the booklocator api
+   *   - Finds relevant item
+   *   - Grabs map-url and callnumber
+   *   - Builds and displays callnumber map-link in row's html
+   */
+
+  var cell_position_map = { "location": 0, "callnumber": 1, "availability": 2, "barcode": 3 };
+  var local_bibnum = null;
+  var trimmed_barcode = null;
+  var valid_locations = [ 'ROCK', 'SCI' ];
+  var bibutils_api_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
+
+  this.process_item = function( row, bibnum ) {
+    /* Processes each row.
+     * Called by clssc_bklctr_handler.process_item_table()
+     */
+    init( bibnum );
+    var row_dict = extract_row_data( row );
+    if ( evaluate_row_data(row_dict)["show_callnumber"] == true ) {
+      if ( local_bibnum == null ) {
+        local_bibnum = grab_ancestor_bib( row );
+      }
+      locator_data = hit_api();
+      update_row( row_dict, row, locator_data );
+    }
+    row.deleteCell( cell_position_map["barcode"] );
+  }
+
+  var init = function( bibnum ) {
+    /* Sets class variables.
+     * Called by process_item()
+     */
+     local_bibnum = bibnum;
+     return;
+  }
+
+  var extract_row_data = function( row ) {
+    /* Takes row dom-object; extracts and returns fielded data.
+     * First row.children[i] is a td-element.
+     * Called by process_item()
+     */
+    var row_data = {};
+    row_data["location"] = row.children[0].textContent.trim();
+    row_data["availability"] = row.children[2].textContent.trim();
+    var barcode = row.children[3].textContent.trim();
+    row_data["barcode"] = barcode.split(" ").join("");
+    trimmed_barcode = row_data["barcode"];
+    var callnumber_node = row.children[1];
+    row_data["callnumber"] = callnumber_node.childNodes[2].textContent.trim();
+    var callnumber_child_nodes = callnumber_node.childNodes;
+    for (var i = 0; i < callnumber_child_nodes.length; i++) {
+      if ( callnumber_child_nodes[i].textContent.trim() == "field v" ) {
+        if ( callnumber_child_nodes[i+1].textContent.trim() == "field #" ) {  // volume_year empty
+          row_data["volume_year"] = "";
+        } else {
+          row_data["volume_year"] = callnumber_child_nodes[i+1].textContent.trim();
+        }
+      }
+    };
+    console.log( "- lctr; row_data, " + JSON.stringify(row_data, null, 4) );
+    return row_data;
+  }
+
+  var evaluate_row_data = function( row_dict ) {
+    /* Evaluates whether 'Request Scan' button should appear; returns boolean.
+     * Called by process_item()
+     */
+    var row_evaluation = { "show_callnumber": false };
+    var location = row_dict["location"];
+    if ( valid_locations.indexOf(location) > -1 ) {
+      if ( trimmed_barcode != null ) {
+        row_evaluation["show_callnumber"] = true;
+      }
+    }
+    console.log( "- lctr; row_evaluation, " + JSON.stringify(row_evaluation, null, 4) );
+    return row_evaluation;
+  }
+
+  var grab_ancestor_bib = function( row ) {
+    /* Grabs bib on results page.
+     * Called by process_item()
+     */
+    var big_element = row.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement;  // apologies to all sentient beings
+    console.log( "- lctr; in grab_ancestor_bib(); big_element, `" + big_element + "`" );
+    var temp_bibnum = big_element.querySelector( "input" ).value;
+    console.log( "- lctr; in grab_ancestor_bib(); temp_bibnum, `" + temp_bibnum + "`" );
+    return temp_bibnum;
+  }
+
+
+
+
+  var hit_api = function() {
+    /* Hits booklocator api.
+     * Called by process_item()
+     */
+    var full_api_url = bibutils_api_pattern.replace( "THE_BIB", local_bibnum );
+    console.log( "- lctr; in hit_api(); full_api_url, `" + full_api_url + "`" );
+
+    $.getJSON( full_api_url, function(data) {
+        console.log( data );
+      }
+    );
+
+
+    console.log( "- lctr; leaving hit_api()" );
+    return;
+  }
+
+
+
+
+  var update_row = function( row_dict, row, locator_data ) {
+    /* Adds `Request Scan` link to row html.
+     * Triggers start of request-item link process.
+     * Called by process_item()
+     */
+    console.log( "- lctr; starting update_row()" );
+    link_html = build_link_html( row_dict );
+    last_cell = row.getElementsByTagName("td")[local_cell_position_map["availability"]];
+    console.log( "- lctr; bklctr_row_processor.update_row(); last_cell, " + last_cell.nodeName );
+    $( last_cell ).after( link_html );  // TODO: build more explicitly with plain js, like jcb project
+    console.log( "- request-scan link added" );
+    bklctr_link_element = $(last_cell).next();
+    console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element, " + bklctr_link_element );
+    console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element context, " + bklctr_link_element.context );
+    console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element context.nodeName, " + bklctr_link_element.context.nodeName );
+    request_item_manager.display_request_link( row, local_bibnum, row_dict["barcode"] );
+    return;
+  }
+
+  // var update_row = function( row_dict, row ) {
+  //   /* Adds `Request Scan` link to row html.
+  //    * Triggers start of request-item link process.
+  //    * Called by process_item()
+  //    */
+  //   console.log( "- lctr; starting update_row()" );
+  //   link_html = build_link_html( row_dict );
+  //   last_cell = row.getElementsByTagName("td")[local_cell_position_map["availability"]];
+  //   console.log( "- lctr; bklctr_row_processor.update_row(); last_cell, " + last_cell.nodeName );
+  //   $( last_cell ).after( link_html );  // TODO: build more explicitly with plain js, like jcb project
+  //   console.log( "- request-scan link added" );
+  //   bklctr_link_element = $(last_cell).next();
+  //   console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element, " + bklctr_link_element );
+  //   console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element context, " + bklctr_link_element.context );
+  //   console.log( "- lctr; bklctr_row_processor.update_row(); bklctr_link_element context.nodeName, " + bklctr_link_element.context.nodeName );
+  //   request_item_manager.display_request_link( row, local_bibnum, row_dict["barcode"] );
+  //   return;
+  // }
+
+  var build_link_html = function( row_dict ) {
+    /* Takes row dict; returns html link.
+     * Called by update_row()
+     */
+    // link = 'Request <a class="classic_booklocator" href="https://library.brown.edu/easyscan/request?callnumber=THECALLNUMBER&barcode=THEBARCODE&bibnum=THEBIBNUM&volume_year=THEVOLYEAR">Scan</a>';
+    link = link.replace( "THECALLNUMBER", row_dict["callnumber"] );
+    link = link.replace( "THEBARCODE", row_dict["barcode"] );
+    link = link.replace( "THEBIBNUM", local_bibnum );
+    link = link.replace( "THEVOLYEAR", row_dict["volume_year"] );
+    console.log( "- lctr; link end, " + link );
+    return link;
+  }
+
+};  // end namespace bklctr_row_processor
+
+
+
 
 
 /***********/
