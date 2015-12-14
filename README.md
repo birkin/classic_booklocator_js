@@ -1,6 +1,6 @@
 ### about ###
 
-`clssc_bklctr.js` adds a "Level X, Aisle Y" link on classic [Josiah](https://josiah.brown.edu) pages. The link leads to the same url used by new-josiah ([example]( Level A, Aisle 12A)).
+`clssc_bklctr.js` adds a "Level X, Aisle Y" link on classic [Josiah](https://josiah.brown.edu) pages. The link leads to the same map url used by new-josiah ([example](https://apps.library.brown.edu/bibutils/map/?loc=rock&call=BQ9449.D657%20D598%202015&title=Dōgen%20and%20Sōtō%20Zen)).
 
 on this page...
 
@@ -10,7 +10,10 @@ on this page...
 
 ### notes ###
 
-coming
+See the [js file comments](https://github.com/birkin/classic_booklocator_js/blob/master/clssc_bklctr.js) for a description of the logic flow.
+
+Code contact: birkin_diana@brown.edu
+
 
 ### license ###
 

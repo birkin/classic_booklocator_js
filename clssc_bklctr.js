@@ -6,22 +6,33 @@ var clssc_bklctr_handler = new function() {
    *
    * See <http://stackoverflow.com/a/881611> for module-pattern reference.
    * Minimizes chances that a function here will interfere with a similarly-named function in another imported js file.
-   * Only find_bib_items() can be called publicly, and only via ```sms_handler.find_bib_items();```.
+   * Only find_bib_items() can be called publicly, and only via ```clssc_bklctr_handler.find_bib_items();```.
    *
-   * Class flow description:
-   * - looks for existence of sms image. If image exists...
-   *   - Grabs bib and builds blacklight sms link
-   *   - Builds and displays image-link html
+   * Controller class flow description:
+   * - Attempts to grab bib from permalink page
+   * - If bib null, attempts to grab bib from where it might be on a holdings-page
+   * - If bib null, attempts to grab bib from bib-page's html, getting there via holdings page link
+   * - If bib null, proceeds to item-rows processing
+   * - Finds all item-rows and for each row:
+   *   - Calls namespace `clssc_bklctr__row_processor` to process the row
+   *     - If bib null, row-processing tries to grab bib from multiple-result-page's enclosing element's input field
+   *     - The barcode is grabbed
+   *     - The bib-api is called
+   *       - The item containing the barcode is found, and the map-link grabbed
+   *     - The book-locator html is built
+   *     - The location html is updated
    *
-   * Reference Josiah page:
-   * - regular bib: <http://josiah.brown.edu/record=b3902979>
+   * Reference:
+   * - items page: <http://josiah.brown.edu/record=b4069600>
+   * - holdings page containing bib: <http://josiah.brown.edu/search~S7?/.b4069600/.b4069600/1,1,1,B/holdings~4069600&FF=&1,0,>
+   * - holdings page without direct bib: <http://josiah.brown.edu/search~S7?/XAmerican+imago&searchscope=7&SORT=D/XAmerican+imago&searchscope=7&SORT=D&searchscope=07&SUBKEY=American+imago/1,53,53,B/holdings&FF=XAmerican+imago&2,2,>
+   * - multiple results page: <http://josiah.brown.edu/search~S11/?searchtype=X&searcharg=zen&searchscope=11&sortdropdown=-&SORT=D&extended=1&SUBMIT=Search&searchlimits=&searchorigarg=tzen>
    */
 
   /* set globals, essentially class attributes */
   var bibnum = null;
-  var sms_url_root = "https://search.library.brown.edu/catalog/sms?id=";
-  var sms_url_full = null;
-  var image_path = "/screens/smsbutton.gif";
+  var api_url_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
+  var api_url_full = null;
 
   this.find_bib_items = function() {
     /* Checks to see if bib_items exist.
