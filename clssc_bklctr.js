@@ -1,5 +1,8 @@
-console.log( "- sms.js START" );
+console.log( "- clssc_bklctr.js START" );
 
+/****************/
+/* MAIN HANDLER */
+/****************/
 
 var clssc_bklctr_handler = new function() {
   /* Namespaces function calls.
@@ -34,29 +37,17 @@ var clssc_bklctr_handler = new function() {
   var api_url_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
   var api_url_full = null;
 
-  var grab_permalink_bib = function() {
-    /* Grabs bib via #recordnum; then continues processing.
-     * Called by check_already_run()
+  this.find_bib = function() {
+    /* Calls bibfinder class to try to get bib, then continues processing.
+     * Called by $(document).ready()
      */
-    var elmnt = document.querySelector( "#recordnum" );
-    update_console( 'elmnt, ' + elmnt )
-    if ( elmnt == null ) {
-      check_holdings_html_for_bib();
-    } else {
-      var url_string = elmnt.href;
-      var segments = url_string.split( "=" )[1];
-      bibnum = segments.slice( 0,8 );
-      update_console( "- bibnum, " + bibnum );
-      // if ( bibnum == null ) {
-      //   check_holdings_html_for_bib();
-      // } else {
-      //   process_item_table();
-      // }
-    }
+    bibnum = "foo";
+    // bibnum = clssc_bklctr_bibfinder.find_bib;
+    update_console( "- bibnum, " + bibnum );
   }
 
   var update_console = function( note ) {
-    console.log( "bklctr - " + note )
+    console.log( "bklctr - " + note );
   }
 
   // var grab_bib = function() {
@@ -105,12 +96,45 @@ var clssc_bklctr_handler = new function() {
 };  // end namespace clssc_bklctr_handler, ```var clssc_bklctr_handler = new function() {```
 
 
+/**************/
+/* BIB-FINDER */
+/**************/
 
+var clssc_bklctr_bibfinder = new function() {
+
+  this.grab_bib = function() {
+    /* Grabs bib via #recordnum; then continues processing.
+     * Called by clssc_bklctr_handler.find_bib
+     */
+    var elmnt = document.querySelector( "#recordnum" );
+    update_console( 'elmnt, ' + elmnt )
+    if ( elmnt == null ) {
+      check_holdings_html_for_bib();
+    } else {
+      var url_string = elmnt.href;
+      var segments = url_string.split( "=" )[1];
+      bibnum = segments.slice( 0,8 );
+      update_console( "- bibnum, " + bibnum );
+      // if ( bibnum == null ) {
+      //   check_holdings_html_for_bib();
+      // } else {
+      //   process_item_table();
+      // }
+    return "bar";
+    }
+  }
+
+};  // end namespace clssc_bklctr_bibfinder, ```var clssc_bklctr_bibfinder = new function() {```
+
+
+/***********/
+/* ON-LOAD */
+/***********/
 
 $(document).ready(
   function() {
     console.log( "- clssc_bklctr.js says document loaded" );
-    clssc_bklctr_handler.grab_permalink_bib();
+    clssc_bklctr_handler.find_bib();
   }
 );
 
