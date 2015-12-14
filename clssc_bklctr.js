@@ -34,19 +34,29 @@ var clssc_bklctr_handler = new function() {
   var api_url_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
   var api_url_full = null;
 
-  this.find_bib_items = function() {
-    /* Checks to see if bib_items exist.
-     * Called by document.ready()
+  var grab_permalink_bib = function() {
+    /* Grabs bib via #recordnum; then continues processing.
+     * Called by check_already_run()
      */
-    var bib_section = document.getElementById( "bib_items" );
-    var relevant_rows = bib_section.querySelectorAll( "tr.bibItemsEntry" );
-    // if ( relevant_rows.length > 0 ) {
-    //   console.log( "- bib-items found; sms link-builder js proceeding" );
-    //   grab_bib();
-    // } else {
-    //   console.log( "- no bib-items found; hiding sms link-builder js will hide image and quit" );
-    //   document.getElementById( "smsfeatures" ).style.visibility="hidden";
-    // }
+    var elmnt = document.querySelector( "#recordnum" );
+    update_console( 'elmnt, ' + elmnt )
+    if ( elmnt == null ) {
+      check_holdings_html_for_bib();
+    } else {
+      var url_string = elmnt.href;
+      var segments = url_string.split( "=" )[1];
+      bibnum = segments.slice( 0,8 );
+      update_console( "- bibnum, " + bibnum );
+      // if ( bibnum == null ) {
+      //   check_holdings_html_for_bib();
+      // } else {
+      //   process_item_table();
+      // }
+    }
+  }
+
+  var update_console = function( note ) {
+    console.log( "bklctr - " + note )
   }
 
   // var grab_bib = function() {
