@@ -109,10 +109,10 @@ var clssc_bklctr_handler = new function() {
 
 $(document).ready(
   function() {
-    console.log( "- sms.js says document loaded" );
-    clssc_bklctr_handler.find_bib_items();
+    console.log( "- clssc_bklctr.js says document loaded" );
+    clssc_bklctr_handler.grab_permalink_bib();
   }
 );
 
 
-console.log( "- sms.js END" );
+console.log( "- clssc_bklctr.js END" );
