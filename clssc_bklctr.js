@@ -168,8 +168,7 @@ var bklctr_row_processor = new function() {
 
   var cell_position_map = { "location": 0, "callnumber": 1, "availability": 2, "barcode": 3 };
   var local_bibnum = null;
-  var local_row = null;
-  var trimmed_barcode = null;  // updated by extract_row_data()
+  var trimmed_barcode = null;  // updated by process_item()
   var valid_locations = [ 'ROCK', 'SCI' ];
   var bibutils_api_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
 
@@ -177,25 +176,23 @@ var bklctr_row_processor = new function() {
     /* Processes each row.
      * Called by clssc_bklctr_handler.process_item_table()
      */
+    console.log( "- lctr; in process_item(); starting" );
     init( bibnum, row );
     var row_dict = extract_row_data( row );
-    if ( evaluate_row_data(row_dict)["show_callnumber"] == true ) {
+    if ( evaluate_row_data(row_dict)["show_booklocator"] == true ) {
       if ( local_bibnum == null ) {
         local_bibnum = grab_ancestor_bib( row );
       }
-      locator_data = hit_api();
-
-      display_link();
+      trimmed_barcode = row_dict["barcode"];
+      hit_api( row );
     }
-    row.deleteCell( cell_position_map["barcode"] );
   }
 
-  var init = function( bibnum, row ) {
+  var init = function( bibnum ) {
     /* Sets class variables.
      * Called by process_item()
      */
      local_bibnum = bibnum;
-     local_row = row;
      return;
   }
 
@@ -209,7 +206,6 @@ var bklctr_row_processor = new function() {
     row_data["availability"] = row.children[2].textContent.trim();
     var barcode = row.children[3].textContent.trim();
     row_data["barcode"] = barcode.split(" ").join("");
-    trimmed_barcode = row_data["barcode"];
     var callnumber_node = row.children[1];
     row_data["callnumber"] = callnumber_node.childNodes[2].textContent.trim();
     var callnumber_child_nodes = callnumber_node.childNodes;
@@ -230,14 +226,15 @@ var bklctr_row_processor = new function() {
     /* Evaluates whether 'Request Scan' button should appear; returns boolean.
      * Called by process_item()
      */
-    var row_evaluation = { "show_callnumber": false };
+    var row_evaluation = { "show_booklocator": false };
     var location = row_dict["location"];
+    console.log( "- lctr; in evaluate_row_data; location, " + location );
     if ( valid_locations.indexOf(location) > -1 ) {
-      if ( trimmed_barcode != null ) {
-        row_evaluation["show_callnumber"] = true;
+      if ( row_dict["barcode"] != null ) {
+        row_evaluation["show_booklocator"] = true;
       }
     }
-    console.log( "- lctr; row_evaluation, " + JSON.stringify(row_evaluation, null, 4) );
+    console.log( "- lctr; in evaluate_row_data; row_evaluation, " + JSON.stringify(row_evaluation, null, 4) );
     return row_evaluation;
   }
 
@@ -252,42 +249,70 @@ var bklctr_row_processor = new function() {
     return temp_bibnum;
   }
 
-  var hit_api = function() {
+  var hit_api = function( row ) {
     /* Hits booklocator api.
      * Called by process_item()
      */
     var full_api_url = bibutils_api_pattern.replace( "THE_BIB", local_bibnum );
-    full_api_url = full_api_url + "?callback=?"
+    full_api_url = full_api_url + "?callback=?"  // avoids same-origin limitation
     console.log( "- lctr; in hit_api(); full_api_url, `" + full_api_url + "`" );
-
     $.getJSON( full_api_url, function(data) {
+        console.log( "- lctr; in hit_api(); data..." );
         console.log( data );
+        extract_locator_data( data["items"], row );
+        console.log( "- lctr; leaving $.getJSON()" );
       }
     );
-
-    booklocator_map_url = "http://google.com"
-    console.log( "- lctr; in hit_api(); booklocator_map_url, `" + booklocator_map_url + "`" );
-
-
-
     console.log( "- lctr; leaving hit_api()" );
     return;
   }
 
+  var extract_locator_data = function( items, current_row ) {
+    /* Determines correct item; extracts shelf, aisle, and callnumber data.
+     * Example display: "Level 3, Aisle 82B"
+     * Called by hit_api()
+     */
+    console.log( "- lctr; in extract_locator_data(); items..." );
+    console.log( items );
+    console.log( "- lctr; in extract_locator_data(); current_row..." );
+    console.log( current_row );
+
+    var extract_dct = {}
+    for ( var i = 0; i < items.length; i++ ) {
+        item = items[i];
+        console.log( "- lctr; in extract_locator_data(); item follows..." );
+        console.log( item );
+        console.log( "- lctr; item.barcode, " + item.barcode );
+        console.log( "- lctr; trimmed_barcode, " + trimmed_barcode );
+        if ( item["barcode"] == trimmed_barcode ) {
+            extract_dct = {
+                "level": item["shelf"]["floor"],
+                "aisle": item["shelf"]["aisle"],
+                "map_url": item["map"] };
+            display_link( extract_dct, current_row );
+        }
+    };
+
+    console.log( "- lctr; leaving extract_locator_data()" );
+    return;
+  }
 
 
-  var display_link = function() {
-    /* Displays link html.
-     * Called by build_url()
-     * Ends `jcblink_row_processor` processing.
+  var display_link = function( data_dct, current_row ) {
+    /* Builds and displays link html.
+     * Called by extract_locator_data()
+     * Ends `bklctr_row_processor` processing.
      */
     console.log( "- lctr; starting display_link()" );
-    var td = local_row.children[0];
+    console.log( "- lctr; current row..." );
+    console.log( current_row );
+    var td = current_row.children[0];
     var dashes = document.createTextNode( " -- " );
     var a = document.createElement( "a" );
-    a.href = booklocator_map_url;
+    a.href = data_dct["map_url"];
     a.setAttribute( "class", "classic_booklocator_map" );
-    var link_text = document.createTextNode( "the_callnumber" );
+    var text = "Level " + data_dct["level"] + ", Aisle " + data_dct["aisle"]
+    var link_text = document.createTextNode( text );
     a.appendChild( link_text );
     td.appendChild( dashes );
     td.appendChild( a );
