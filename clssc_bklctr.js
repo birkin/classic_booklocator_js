@@ -168,7 +168,6 @@ var bklctr_row_processor = new function() {
 
   var cell_position_map = { "location": 0, "callnumber": 1, "availability": 2, "barcode": 3 };
   var local_bibnum = null;
-  var trimmed_barcode = null;  // updated by process_item()
   var valid_locations = [ 'ROCK', 'SCI' ];
   var bibutils_api_pattern = "https://apps.library.brown.edu/bibutils/bib/THE_BIB/";
 
@@ -183,8 +182,7 @@ var bklctr_row_processor = new function() {
       if ( local_bibnum == null ) {
         local_bibnum = grab_ancestor_bib( row );
       }
-      trimmed_barcode = row_dict["barcode"];
-      hit_api( row );
+      hit_api( row, row_dict["barcode"] );
     }
   }
 
@@ -218,7 +216,7 @@ var bklctr_row_processor = new function() {
         }
       }
     };
-    console.log( "- lctr; row_data, " + JSON.stringify(row_data, null, 4) );
+    console.log( "- lctr; in extract_row_data(); row_data, " + JSON.stringify(row_data, null, 4) );
     return row_data;
   }
 
@@ -249,8 +247,9 @@ var bklctr_row_processor = new function() {
     return temp_bibnum;
   }
 
-  var hit_api = function( row ) {
+  var hit_api = function( row, row_barcode ) {
     /* Hits booklocator api.
+     * `row` and `row_barcode` are used by subsequent function.
      * Called by process_item()
      */
     var full_api_url = bibutils_api_pattern.replace( "THE_BIB", local_bibnum );
@@ -259,7 +258,7 @@ var bklctr_row_processor = new function() {
     $.getJSON( full_api_url, function(data) {
         console.log( "- lctr; in hit_api(); data..." );
         console.log( data );
-        extract_locator_data( data["items"], row );
+        extract_locator_data( data["items"], row, row_barcode );
         console.log( "- lctr; leaving $.getJSON()" );
       }
     );
@@ -267,9 +266,10 @@ var bklctr_row_processor = new function() {
     return;
   }
 
-  var extract_locator_data = function( items, current_row ) {
-    /* Determines correct item; extracts shelf, aisle, and callnumber data.
-     * Example display: "Level 3, Aisle 82B"
+  var extract_locator_data = function( items, current_row, row_barcode ) {
+    /* Determines correct api-data-item from the row_barcode; extracts shelf, aisle, and callnumber data.
+     * Display goal: "Level 3, Aisle 82B"
+     * `current_row` used by subsequent function.
      * Called by hit_api()
      */
     console.log( "- lctr; in extract_locator_data(); items..." );
@@ -283,8 +283,8 @@ var bklctr_row_processor = new function() {
         console.log( "- lctr; in extract_locator_data(); item follows..." );
         console.log( item );
         console.log( "- lctr; item.barcode, " + item.barcode );
-        console.log( "- lctr; trimmed_barcode, " + trimmed_barcode );
-        if ( item["barcode"] == trimmed_barcode ) {
+        console.log( "- lctr; row_barcode, " + row_barcode );
+        if ( item["barcode"] == row_barcode ) {
             extract_dct = {
                 "level": item["shelf"]["floor"],
                 "aisle": item["shelf"]["aisle"],
@@ -296,7 +296,6 @@ var bklctr_row_processor = new function() {
     console.log( "- lctr; leaving extract_locator_data()" );
     return;
   }
-
 
   var display_link = function( data_dct, current_row ) {
     /* Builds and displays link html.
